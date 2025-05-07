@@ -503,7 +503,7 @@ def evaluate(ast, environment):
         # Handle mode declarations
         if target["tag"] == "identifier" and target["value"].startswith("switchmode "):
             switchmode = target["value"].replace("switchmode ", "")
-            environment.setdefault("__modes__", {})[mode] = value
+            environment.setdefault("__modes__", {})[switchmode] = value
             return value, None
 
         # Regular variable or complex assignment
