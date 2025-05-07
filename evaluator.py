@@ -501,8 +501,8 @@ def evaluate(ast, environment):
             return value, None
 
         # Handle mode declarations
-        if target["tag"] == "identifier" and target["value"].startswith("mode "):
-            mode = target["value"].replace("mode ", "")
+        if target["tag"] == "identifier" and target["value"].startswith("switchmode "):
+            switchmode = target["value"].replace("switchmode ", "")
             environment.setdefault("__modes__", {})[mode] = value
             return value, None
 

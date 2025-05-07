@@ -15,10 +15,10 @@ def parse_special_keywords(tokens):
         return {"tag": "assign", "target": target, "value": value}, remaining
 
     #!------ New feature implemented: Mode Support ------!
-    if tokens[0]["tag"] == "mode":
-        assert tokens[1]["tag"] == "identifier", "Expected identifier after 'mode'"
-        assert tokens[2]["tag"] == "=", "Expected '=' after mode name"
-        target = {"tag": "identifier", "value": "mode " + tokens[1]["value"]}
+    if tokens[0]["tag"] == "switchmode":
+        assert tokens[1]["tag"] == "identifier", "Expected identifier after 'switchmode'"
+        assert tokens[2]["tag"] == "=", "Expected '=' after switchmode name"
+        target = {"tag": "identifier", "value": "switchmode " + tokens[1]["value"]}
         value, remaining = parse_expression(tokens[3:])
         return {"tag": "assign", "target": target, "value": value}, remaining
 
