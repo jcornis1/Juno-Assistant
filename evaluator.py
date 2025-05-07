@@ -154,7 +154,15 @@ def ast_to_string(ast):
             return "return " + ast_to_string(ast["value"])
         else:
             return "return" 
-
+    if ast["tag"] == "switch":
+        s = "switch (" + ast_to_string(ast["value"]) + ") {"
+        for case in ast["cases"]:
+            s += f"case {ast_to_string(case['condition'])}: {ast_to_string(case['body'])}"
+        if ast.get("default"):
+            s += f"default: {ast_to_string(ast['default'])}"
+        s += "}"
+        return s
+    
     assert False, f"Unknown tag [{ast['tag']}] in AST"
 
 __builtin_functions = [
@@ -187,6 +195,22 @@ def evaluate(ast, environment):
             int,
         ], f"unexpected type {type(ast['value'])}"
         return ast["value"], None
+    
+    if ast.get("tag") == "switch":
+        switch_value, _ = evaluate(ast["value"], environment)
+        for case in ast["cases"]:
+            case_value, _ = evaluate(case["condition"], environment)
+            if switch_value == case_value:
+                value, exit_status = evaluate(case["body"], environment)
+                if exit_status:
+                    return value, exit_status
+                return value, None
+        if ast.get("default"):
+            value, exit_status = evaluate(ast["default"], environment)
+            if exit_status:
+                return value, exit_status
+            return value, None
+        return None, None
     
     if ast["tag"] == "boolean":
         assert ast["value"] in [
@@ -878,6 +902,143 @@ def test_evaluator_with_new_tags():
     equals("if(1){x=1; y=2;}", {}, None, {"x":1,"y":2})
     equals("if(1){x=1; if(false) {z=4} y=2;}", {}, None, {"x":1,"y":2})
 
+def test_evaluate_switch_statement():
+    print("test evaluate_switch_statement")
+
+    environment = {"x": 1}
+    code = """
+        switch(x) {
+            case 1: { print 10 }
+            case 2: { print 20 }
+        }
+    """
+    equals(code, environment, "10\n", {"x": 1})
+
+    environment = {"x": 1}
+    code = """
+        switch(x) {
+            case 1: {print 10}
+            case 2: {print 20}
+        }
+    """
+    equals(code, environment, "10\n", {"x": 1})
+
+    environment = {"x": 2}
+    code = """
+        switch(x) {
+            case 1: { y=100 }
+            case 2: { y=200 }
+        }
+    """
+    equals(code, environment, 200, {"x": 2, "y": 200})
+
+    environment = {"x": 1}
+    code = """
+        switch(x) {
+            case 1: {print 10; y=100}
+            case 2: {print 20; y=200}
+        }
+    """
+    equals(code, environment, 100, {"x": 1, "y": 100})
+
+    environment = {"x": 2}
+    code = """
+        switch(x) {
+            case 1: {print 10; y=100}
+            case 2: {print 20; y=200}
+        }
+    """
+    equals(code, environment, 200, {"x": 2, "y": 200})
+
+    environment = {"x": 3}
+    code = """
+        switch(x) {
+            case 1: {print 10; y=100}
+            case 2: {print 20; y=200}
+            default: {print 30; y=300}
+        }
+    """
+    equals(code, environment, 300, {"x": 3, "y": 300})
+
+    environment = {"x": 3}
+    code = """
+        switch(x) {
+            case 1: {print 10; y=100}
+            case 2: {print 20; y=200}
+        }
+    """
+    equals(code, environment, None, {"x": 3})
+
+    environment = {"x": 1}
+    code = """
+        switch(x) {}
+    """
+    equals(code, environment, None, {"x": 1})
+
+    environment = {"x": 1}
+    code = """
+    switch(x) {
+        case 1: {y=10; z=20; print y+z; w=30}
+        case 2: {y=200}
+    }
+    """
+    equals(code, environment, 30, {"x": 1, "y": 10, "z": 20, "w": 30})
+
+    environment = {}
+    code = """
+        function f(x) {
+            switch(x) {
+                case 1: {print 10; return 100}
+                case 2: {print 20; return 200}
+                default: {print 30; return 300}
+            }
+        };
+        f(1)
+    """
+    expected_env = {
+        'f': {
+            'tag': 'function',
+            'parameters': [{'tag': 'identifier', 'value': 'x', 'position': 20}],
+            'body': {
+                'tag': 'statement_list',
+                'statements': [{
+                    'tag': 'switch',
+                    'value': {'tag': 'identifier', 'value': 'x'},
+                    'cases': [
+                        {
+                            'condition': {'tag': 'number', 'value': 1},
+                            'body': {
+                                'tag': 'statement_list',
+                                'statements': [
+                                    {'tag': 'print', 'value': {'tag': 'number', 'value': 10}},
+                                    {'tag': 'return', 'value': {'tag': 'number', 'value': 100}}
+                                ]
+                            }
+                        },
+                        {
+                            'condition': {'tag': 'number', 'value': 2},
+                            'body': {
+                                'tag': 'statement_list',
+                                'statements': [
+                                    {'tag': 'print', 'value': {'tag': 'number', 'value': 20}},
+                                    {'tag': 'return', 'value': {'tag': 'number', 'value': 200}}
+                                ]
+                            }
+                        }
+                    ],
+                    'default': {
+                        'tag': 'statement_list',
+                        'statements': [
+                            {'tag': 'print', 'value': {'tag': 'number', 'value': 30}},
+                            {'tag': 'return', 'value': {'tag': 'number', 'value': 300}}
+                        ]
+                    }
+                }]
+            }
+        }
+    }
+    equals(code, environment, 100, expected_env)
+    
 if __name__ == "__main__":
     # statements and programs are tested implicitly
     test_evaluate_single_value()
@@ -899,4 +1060,5 @@ if __name__ == "__main__":
     test_evaluate_object_literal()
     test_evaluate_builtins()
     test_evaluator_with_new_tags()
+    test_evaluate_switch_statement()
     print("done.")

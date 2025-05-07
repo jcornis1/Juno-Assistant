@@ -100,8 +100,9 @@ grammar = """
     import_statement = "import" expression
     break_statement = "break"
     continue_statement = "continue"
+    switch_statement = "switch" "(" expression ")" "{" { "case" expression ":" statement_list } [ "default" ":" statement_list ] "}"
 
-    statement = if_statement | while_statement | function_statement | return_statement | print_statement | exit_statement | import_statement | break_statement | continue_statement | assert_statement | expression
+    statement = if_statement | while_statement | function_statement | return_statement | print_statement | exit_statement | import_statement | break_statement | continue_statement | assert_statement | switch_statement | expression
 
     program = [ statement { ";" statement } {";"} ]
     """
@@ -1279,11 +1280,11 @@ def parse_statement(tokens):
     """
     statement = if_statement | while_statement | function_statement | return_statement | print_statement | exit_statement | import_statement | break_statement | continue_statement | assert_statement | expression
     """
-    special, remaining = parse_special_keywords(tokens)
-    if special: 
-        return special, remaining
-    # if the first token is not a special keyword, parse it as an expression
 
+    ast, remaining = parse_special_keywords(tokens)
+    if ast is not None:
+        return ast, remaining
+    
     tag = tokens[0]["tag"]
     # note: none of these consumes a token
     if tag == "if":
@@ -1306,12 +1307,96 @@ def parse_statement(tokens):
         return parse_continue_statement(tokens)
     if tag == "assert":
         return parse_assert_statement(tokens)
+    if tag == "switch":
+        return parse_switch_statement(tokens)
     return parse_expression(tokens)
 
+def parse_switch_statement(tokens):
+    """
+    switch_statement = "switch" "(" expression ")" "{" { "case" expression ":" statement_list } [ "default" ":" statement_list ] "}"
+    """
+    assert tokens[0]["tag"] == "switch", f"Expected 'switch' at position {tokens[0]['position']}"
+    tokens = tokens[1:]
+    assert tokens[0]["tag"] == "(", f"Expected '(' at position {tokens[0]['position']}"
+    value, tokens = parse_expression(tokens[1:])
+    assert tokens[0]["tag"] == ")", f"Expected ')' at position {tokens[0]['position']}"
+    tokens = tokens[1:]
+    assert tokens[0]["tag"] == "{", f"Expected '{{' at position {tokens[0]['position']}"
+    tokens = tokens[1:]
+    cases = []
+    default_body = None
+    while tokens and tokens[0]["tag"] in ["case", "default"]:
+        if tokens[0]["tag"] == "case":
+            condition, tokens = parse_expression(tokens[1:])
+            assert tokens[0]["tag"] == ":", f"Expected ':' at position {tokens[0]['position']}"
+            tokens = tokens[1:]
+            body, tokens = parse_statement_list(tokens)
+            cases.append({"condition": condition, "body": body})
+        elif tokens[0]["tag"] == "default":
+            assert default_body is None, "Multiple default cases in switch statement"
+            assert tokens[1]["tag"] == ":", f"Expected ':' at position {tokens[1]['position']}"
+            tokens = tokens[2:]
+            default_body, tokens = parse_statement_list(tokens)
+    assert tokens and tokens[0]["tag"] == "}", f"Expected '}}' at position {tokens[0]['position']}"
+    node = {"tag": "switch", "value": value, "cases": cases}
+    if default_body is not None:
+        node["default"] = default_body
+    return node, tokens[1:]
 
+def test_parse_switch_statement():
+    """
+    switch_statement = "switch" "(" expression ")" "{" { "case" expression ":" statement_list } [ "default" ":" statement_list ] "}"
+    """
+    print("testing parse_switch_statement...")
+    ast, tokens = parse_switch_statement(tokenize("switch(x){case 1: {print 1} case 2: {print 2}}"))
+    assert ast == {
+        "tag": "switch",
+        "value": {"tag": "identifier", "value": "x"},
+        "cases": [
+            {
+                "condition": {"tag": "number", "value": 1},
+                "body": {
+                    "tag": "statement_list",
+                    "statements": [{"tag": "print", "value": {"tag": "number", "value": 1}}],
+                },
+            },
+            {
+                "condition": {"tag": "number", "value": 2},
+                "body": {
+                    "tag": "statement_list",
+                    "statements": [{"tag": "print", "value": {"tag": "number", "value": 2}}],
+                },
+            },
+        ],
+    }
+    ast, tokens = parse_switch_statement(tokenize("switch(x){case 1: {print 1} default: {print 0}}"))
+    assert ast == {
+        "tag": "switch",
+        "value": {"tag": "identifier", "value": "x"},
+        "cases": [
+            {
+                "condition": {"tag": "number", "value": 1},
+                "body": {
+                    "tag": "statement_list",
+                    "statements": [{"tag": "print", "value": {"tag": "number", "value": 1}}],
+                },
+            },
+        ],
+        "default": {
+            "tag": "statement_list",
+            "statements": [{"tag": "print", "value": {"tag": "number", "value": 0}}],
+        },
+    }
+    ast, tokens = parse_switch_statement(tokenize("switch(x){}"))
+    assert ast == {
+        "tag": "switch",
+        "value": {"tag": "identifier", "value": "x"},
+        "cases": [],
+    }
+    
 def test_parse_statement():
     """
-    statement = if_statement | while_statement | function_statement | return_statement | print_statement | exit_statement | import_statement | break_statement | continue_statement | assert_statement | expression
+    statement = if_statement | while_statement | function_statement | return_statement | print_statement | exit_statement | import_statement | break_statement | continue_statement | assert_statement | switch_statement | expression
     """
     print("testing parse_statement...")
 
@@ -1475,6 +1560,7 @@ if __name__ == "__main__":
         test_parse_assert_statement,
         test_parse_statement,
         test_parse_program,
+        test_parse_switch_statement,
     ]
 
     test_grammar = grammar

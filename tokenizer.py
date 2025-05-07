@@ -22,6 +22,9 @@ patterns = [
     [r"import", "import"],  # import keyword
     [r"modeInstructions", "identifier"],  # modeInstructions keyword    # ------- New feature implemented: Mode Support -------!
     [r"switchmode", "switchmode"],      # new keyword for mode declarations               # ------- New feature implemented: Mode Support -------!
+    [r"switch", "switch"],  # switch keyword
+    [r"case", "case"], # case keyword
+    [r"default", "default"], # case keyword
     [r"apikey", "apikey"],  # new keyword for API key declarations            # ------- New feature implemented: API Key Support -------!
     [r"callMode", "callMode"],  # callMode built-in function                  # ------- New feature implemented: Mode Support -------!
     [r"profile", "profile"],  # profile keyword                               # ------- New feature implemented: Mode Support -------!
@@ -240,6 +243,13 @@ def test_keywords():
         "import",  # (reserved for future use)
         "input",
         "print",
+        "switch",
+        "case",
+        "default",
+        "switchmode",
+        "apikey",
+        "callMode",
+        "profile",
         "exit",
     ]:
         t = tokenize(keyword)
